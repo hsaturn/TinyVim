@@ -189,15 +189,13 @@ bool Splitter::split(Wid wid, Window from, bool vertical, bool on_side_1, uint16
   return false;
 }
 
-void Splitter::draw(Window& from, uint16_t wid)
+void Splitter::draw(Window win, uint16_t wid)
 {
   uint16_t win_bit = wid-(wid & (wid-1)); // (last bit of cur_wid)
   wid |= win_bit>>1;
   uint16_t wid_0 = wid & ~win_bit;
   uint16_t wid_1 = wid;
   TypeSize& split = split_;
-  Term << "draw " << from << ", split=" << split << endl;
-  Window win = from;
   auto printWid = [](const Window& win, uint16_t wid)
   {
       Term.gotoxy((win.top+win.height)/2,(win.left+win.width)/2-4);
@@ -213,13 +211,12 @@ void Splitter::draw(Window& from, uint16_t wid)
       Term << "\u2502\033[1B\033[1D";
     }
 
-    win.width = split.size;
     if (side_1)
-      side_1->draw(win, wid_1);
+      side_1->draw(Window(win.top, win.left, split.size, win.height), wid_1);
     else printWid(win, wid_1);
 
-    win.left = from.left+split.size+1;
-    win.width = from.width-split.size - 1;
+    win.left += split.size + 1;
+    win.width += split.size - 1;
     if (side_0)
       side_0->draw(win, wid_0);
     else printWid(win, wid_0);
@@ -230,13 +227,12 @@ void Splitter::draw(Window& from, uint16_t wid)
     for(int i=0; i < win.width; i++) Term << "\u2500";
     Term << endl;
 
-    win.height = split.size;
     if (side_1)
-      side_1->draw(win, wid_1);
+      side_1->draw(Window(win.top, win.left, win.width, split.size), wid_1);
     else printWid(win, wid_1);
 
-    win.height = from.height - split.size - 1;
-    win.top = from.top + split.size+1;
+    win.height += - split.size - 1;
+    win.top += split.size+1;
     if (side_0)
       side_0->draw(win, wid_0);
     else printWid(win, wid_0);
