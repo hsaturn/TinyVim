@@ -176,11 +176,17 @@ bool Splitter::split(Wid wid, Window from, bool vertical, bool on_side_1, uint16
     Term << "splitting " << from << endl;
     if ((vertical and from.width > size) or (not vertical and from.height > size))
     {
-      // FIXME, side_1 or side_0 should be nullptr here
+      // FIXME if side exists, vertical should be side.vertical
       if (on_side_1)
-        side_1 = new Splitter(vertical, size);
+      {
+        if (side_1) side_1->split_.size = size;
+        else side_1 = new Splitter(vertical, size);
+      }
       else
-        side_0 = new Splitter(vertical, size);
+      {
+        if (side_0) side_0->split_.size = size;
+        else side_0 = new Splitter(vertical, size);
+      }
       return true;
     }
   }
