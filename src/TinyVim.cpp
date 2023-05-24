@@ -167,7 +167,7 @@ Splitter::~Splitter()
   delete side_0;
 }
 
-bool Splitter::split(Wid wid, Window& from, bool vertical, bool on_side_1, uint16_t size)
+bool Splitter::split(Wid wid, Window from, bool vertical, bool on_side_1, uint16_t size)
 {
   Term << "--- split " << hex(wid) << ", sz=" << size << ", side=" << on_side_1 << endl;
   Splitter* splitter=this;

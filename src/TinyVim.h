@@ -123,7 +123,7 @@ class Splitter
     */
     uint16_t findWindow(Window&, const Coord&);
     bool calcWindow(Wid, Window&, Splitter* start=nullptr);
-    bool split(Wid, Window& from, bool vertical, bool side_1, uint16_t size);
+    bool split(Wid, Window from, bool vertical, bool side_1, uint16_t size);
     void close(Wid);
     void draw(Window& win, uint16_t wid_base=0x8000);
     bool forEachWindow(Window& from,
