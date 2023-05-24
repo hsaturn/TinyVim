@@ -27,48 +27,50 @@ Vim::Vim(TinyTerm* term, std::string args)
 
 void Window::frame(TinyTerm& term)
 {
+  term.saveCursor();
   auto line=[&term, this]() {
     for(int i=0; i<width; i++) term << "\u2500";
   };
   auto side=[&term, this]() { 
-    for(int i=0; i<width; i++) term << "\u2502\033[1B\033[1D";
+    for(int i=0; i<height; i++) term << "\u2502\033[1B\033[1D";
   };
   uint16_t has_right = left + width;
   if (has_right > term.sx) has_right = 0; 
-  uint16_t has_bottom = top + height + 1;
+  uint16_t has_bottom = top + height;
   if (has_bottom > term.sy) has_bottom = 0;
 
-  if (top>0)
+  if (top>1)
   {
-    if (left>0) {
-      term.gotoxy(top,left-1); term << F("\u250C");
+    if (left>1) {
+      term.gotoxy(top-1,left-1); term << F("\u250C");
     }
     else
-      term.gotoxy(top, left);
+      term.gotoxy(top-1, left);
     line();
-    if (has_right) term << "\u2510";
+    if (has_right) term << F("\u2510");
   }
-  if (left>0)
+  if (left>1)
   {
-    term.gotoxy(top+1,left-1);
+    term.gotoxy(top,left-1);
     side();
   }
   if (has_right)
   {
-    term.gotoxy(has_right, top+1);
+    term.gotoxy(top, has_right);
     side();
   }
   if (has_bottom)
   {
-    if (left>0) {
+    if (left>1) {
       term.gotoxy(has_bottom, left-1);
-      term << "\u2514";
+      term << F("\u2514");
     }
     else
       term.gotoxy(has_bottom, left);
     line();
-    if (has_right) term << "\u2518";
+    if (has_right) term << F("\u2518");
   }
+  term.restoreCursor();
 }
 
 Buffer* Vim::open(const char* filename)
@@ -144,7 +146,7 @@ bool Buffer::read(const char* filename)
 void Vim::onKey(TinyTerm::KeyCode key)
 {
   if (key==TinyTerm::KEY_CTRL_C) terminate();
-  Term << "vim key " << key << endl;
+  Term << F("vim key ") << key << endl;
 }
 
 void Vim::onMouse(const TinyTerm::MouseEvent& e)
