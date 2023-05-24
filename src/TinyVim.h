@@ -122,6 +122,7 @@ class Splitter
        if window is not found, window.top=-1
     */
     uint16_t findWindow(Window&, const Coord&);
+    // care : Window is modified
     bool calcWindow(Wid, Window&, Splitter* start=nullptr);
     bool split(Wid, Window from, bool vertical, bool side_1, uint16_t size);
     void close(Wid);
