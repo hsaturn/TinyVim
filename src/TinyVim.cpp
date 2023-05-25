@@ -19,10 +19,11 @@ Vim::Vim(TinyTerm* term, std::string args)
     return;
   }
   term->getTermSize();
+  // TODO should be a loop on all args
   *term << "vim started (" << args << ")" << endl;
-  Buffer* buff=open(args.c_str());
-  // addWid(buff, curwid);
-  buff->redraw(curwid, term, &splitter);
+  buffers[args].read(args.c_str());
+  buffers[args].addWindow(curwid);
+  buffers[args].redraw(curwid, term, &splitter);
 }
 
 void Window::frame(TinyTerm& term)
@@ -71,24 +72,6 @@ void Window::frame(TinyTerm& term)
     if (has_right) term << F("\u2518");
   }
   term.restoreCursor();
-}
-
-Buffer* Vim::open(const char* filename)
-{
-  for(auto& buffer: buffers)
-  {
-    *term << "buffer(" << buffer.filename() << ") / " << filename << endl;
-    if (buffer.filename() == filename)
-      return &buffer;
-  }
-  buffers.push_back(Buffer(filename));
-  *term << "open ";
-  return open(filename);
-}
-
-Buffer::Buffer(const char* filename)
-{
-  read(filename);
 }
 
 void Buffer::reset()
@@ -341,7 +324,7 @@ void Splitter::close(Wid)
 {
 }
 
-wid Splitter::findWindow(Window& term, const Coord& point)
+Wid Splitter::findWindow(Window& term, const Cursor& point)
 {
   Wid win=0;
   forEachWindow(term,
@@ -350,7 +333,7 @@ wid Splitter::findWindow(Window& term, const Coord& point)
       if (candidate.isInside(point))
       {
         win = wid;
-        return false;
+        return false; // exit forEachWindow
       }
       return true;  // continue
     }
@@ -358,7 +341,7 @@ wid Splitter::findWindow(Window& term, const Coord& point)
   return win;
 }
 
-void Splitter::dump(Window from, std::string indent, wid cur_wid)
+void Splitter::dump(Window from, std::string indent, Wid cur_wid)
 {
   Wid win_bit = cur_wid-(cur_wid & (cur_wid-1)); // (last bit of cur_wid)
   cur_wid |= win_bit>>1;
@@ -411,7 +394,7 @@ void WindowBuffer::draw(const Window& win, TinyTerm& term, Buffer& buff)
 
 void WindowBuffer::focus(TinyTerm& term)
 {
-  term.gotoxy(cursor_top, cursor_left);
+  term.gotoxy(cursor.row, cursor.col);
 }
 
 }
