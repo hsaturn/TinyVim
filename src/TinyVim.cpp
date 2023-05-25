@@ -100,7 +100,7 @@ void Buffer::reset()
   filename_.clear();
 }
 
-void Buffer::redraw(uint16_t wid, TinyTerm* term, Splitter* splitter)
+void Buffer::redraw(Wid wid, TinyTerm* term, Splitter* splitter)
 {
   Window win(1,1,term->sx, term->sy);
   if (splitter->calcWindow(wid, win))
@@ -195,18 +195,18 @@ bool Splitter::split(Wid wid, Window from, bool vertical, bool on_side_1, uint16
   return false;
 }
 
-void Splitter::draw(Window win, uint16_t wid)
+void Splitter::draw(Window win, Wid wid)
 {
-  uint16_t win_bit = wid-(wid & (wid-1)); // (last bit of cur_wid)
+  Wid win_bit = wid-(wid & (wid-1)); // (last bit of cur_wid)
   wid |= win_bit>>1;
-  uint16_t wid_0 = wid & ~win_bit;
-  uint16_t wid_1 = wid;
+  Wid wid_0 = wid & ~win_bit;
+  Wid wid_1 = wid;
   TypeSize& split = split_;
-  auto printWid = [](const Window& win, uint16_t wid)
+  auto printWid = [](const Window& win, Wid wid)
   {
-      Term.gotoxy((win.top+win.height)/2,(win.left+win.width)/2-4);
+      Term.gotoxy(win.top+win.height/2,win.left+win.width/2-4);
       Term << ' ' << hex(wid) << ' ';
-      Term.gotoxy((win.top+win.height)/2+1,(win.left+win.width)/2-6);
+      Term.gotoxy(win.top+win.height/2+1,win.left+win.width/2-6);
       Term << ' ' << win << ' ';
   };
   if (split.vertical)
@@ -217,9 +217,10 @@ void Splitter::draw(Window win, uint16_t wid)
       Term << "\u2502\033[1B\033[1D";
     }
 
+    Window w1(win.top, win.left, split.size, win.height);
     if (side_1)
-      side_1->draw(Window(win.top, win.left, split.size, win.height), wid_1);
-    else printWid(win, wid_1);
+      side_1->draw(w1, wid_1);
+    else printWid(w1, wid_1);
 
     win.left += split.size + 1;
     win.width += split.size - 1;
@@ -233,9 +234,10 @@ void Splitter::draw(Window win, uint16_t wid)
     for(int i=0; i < win.width; i++) Term << "\u2500";
     Term << endl;
 
+    Window w1(win.top, win.left, win.width, split.size);
     if (side_1)
-      side_1->draw(Window(win.top, win.left, win.width, split.size), wid_1);
-    else printWid(win, wid_1);
+      side_1->draw(w1, wid_1);
+    else printWid(w1, wid_1);
 
     win.height += - split.size - 1;
     win.top += split.size+1;
@@ -248,7 +250,7 @@ void Splitter::draw(Window win, uint16_t wid)
 void Splitter::dump2(Window from)
 {
   forEachWindow(from,
-    [](const Window& win, uint16_t wid, const Splitter* splitter) -> bool
+    [](const Window& win, Wid wid, const Splitter* splitter) -> bool
     {
       Term << wid << ' ' << win << endl;
       return true;
@@ -257,13 +259,13 @@ void Splitter::dump2(Window from)
 }
 
 bool Splitter::forEachWindow(Window& from,
-  std::function<bool(const Window& win, uint16_t wid, const Splitter* cur_split)> fun,
-  uint16_t wid)
+  std::function<bool(const Window& win, Wid wid, const Splitter* cur_split)> fun,
+  Wid wid)
 {
-  uint16_t win_bit = wid-(wid & (wid-1)); // (last bit of cur_wid)
+  Wid win_bit = wid-(wid & (wid-1)); // (last bit of cur_wid)
   wid |= win_bit>>1;
-  uint16_t wid_0 = wid & ~win_bit;
-  uint16_t wid_1 = wid;
+  Wid wid_0 = wid & ~win_bit;
+  Wid wid_1 = wid;
   TypeSize& split = split_;
   Window win = from;
   if (split.vertical)
@@ -303,7 +305,7 @@ bool Splitter::forEachWindow(Window& from,
   return true;
 }
 
-bool Splitter::calcWindow(uint16_t wid, Window& win, Splitter* splitter)
+bool Splitter::calcWindow(Wid wid, Window& win, Splitter* splitter)
 {
   splitter = this;
   while((wid & 0x7FFF) and splitter)
@@ -339,11 +341,11 @@ void Splitter::close(Wid)
 {
 }
 
-uint16_t Splitter::findWindow(Window& term, const Coord& point)
+wid Splitter::findWindow(Window& term, const Coord& point)
 {
-  uint16_t win=0;
+  Wid win=0;
   forEachWindow(term,
-    [&point,&win](const Window& candidate, uint16_t wid, const Splitter* splitter) -> bool
+    [&point,&win](const Window& candidate, Wid wid, const Splitter* splitter) -> bool
     {
       if (candidate.isInside(point))
       {
@@ -356,12 +358,12 @@ uint16_t Splitter::findWindow(Window& term, const Coord& point)
   return win;
 }
 
-void Splitter::dump(Window from, std::string indent, uint16_t cur_wid)
+void Splitter::dump(Window from, std::string indent, wid cur_wid)
 {
-  uint16_t win_bit = cur_wid-(cur_wid & (cur_wid-1)); // (last bit of cur_wid)
+  Wid win_bit = cur_wid-(cur_wid & (cur_wid-1)); // (last bit of cur_wid)
   cur_wid |= win_bit>>1;
-  uint16_t wid_0 = cur_wid & ~win_bit;
-  uint16_t wid_1 = cur_wid;
+  Wid wid_0 = cur_wid & ~win_bit;
+  Wid wid_1 = cur_wid;
   indent += "  ";
   Term << indent << "dump from ";
   Term << from << ' ' << (split_.vertical ? 'V' : 'H') << split_.size << endl;
@@ -403,9 +405,13 @@ void Splitter::dump(Window from, std::string indent, uint16_t cur_wid)
     Term << indent << "wid_0:" << hex(wid_0) << ' ' << from << endl;
 }
 
-void WindowBuffer::draw(Buffer& buff)
+void WindowBuffer::draw(const Window& win, TinyTerm& term, Buffer& buff)
 {
-  Window win(1,1,term.sx, term.sy);
+}
+
+void WindowBuffer::focus(TinyTerm& term)
+{
+  term.gotoxy(cursor_top, cursor_left);
 }
 
 }

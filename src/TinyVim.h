@@ -12,18 +12,26 @@
 namespace tiny_vim
 {
 
+using Wid=uint16_t;
 using string=std::string;
 
 void error(const char*);
 
 class Splitter;
 
+struct Cursor
+{
+  uint16_t top;
+  uint16_t left;
+  Cursor(uint16_t top, uint16_t left) : top(top), left(left) {}
+}
+
 class Buffer
 {
   public:
     Buffer(const char* filename);
 
-    void redraw(uint16_t wid, TinyTerm* term, Splitter*);
+    void redraw(Wid wid, TinyTerm* term, Splitter*);
 
     string filename() const { return filename_; }
     void reset();
@@ -81,19 +89,17 @@ class Buffer;
 class WindowBuffer
 {
   public:
-    WindowBuffer(TinyTerm& term, uint16_t wid) : term(term), wid(wid){}
-
-    void draw(Buffer& buff);
+    void draw(const Window& win, TinyTerm& term, Buffer& buff);
+    void focus();
 
   private:
-    TinyTerm& term;
-    uint16_t wid;
-    uint16_t line_top;
-    uint16_t left_col;
+    std::map<Wid, WindowBuffer> wbuffs;
+    Cursor pos;     // Top left of document
+    Cursor cursor;
 };
 
 /*
-Windows are 'virtual'. A window is an uint16_t (the wid)
+Windows are 'virtual'. A window is an wid (the wid)
 When one needs a window properties, it has to use
 Splitter::calcWindow()
 The most significant but of wid indicates if the window is
@@ -113,7 +119,6 @@ class Splitter
     { out << (ts.vertical ? 'V' : 'H') << ts.size; return out; }
   };
   public:
-    using Wid=uint16_t;   // Window id
     Splitter(bool vertical, uint16_t size);
     Splitter(const char c, uint16_t size) : Splitter(c=='v', size){}
     ~Splitter();
@@ -121,17 +126,17 @@ class Splitter
     /* window is input/output
        if window is not found, window.top=-1
     */
-    uint16_t findWindow(Window&, const Coord&);
+    Wid findWindow(Window&, const Coord&);
     // care : Window is modified
     bool calcWindow(Wid, Window&, Splitter* start=nullptr);
     bool split(Wid, Window from, bool vertical, bool side_1, uint16_t size);
     void close(Wid);
-    void draw(Window win, uint16_t wid_base=0x8000);
+    void draw(Window win, Wid wid_base=0x8000);
     bool forEachWindow(Window& from,
-      std::function<bool(const Window&, uint16_t wid, const Splitter* cur_split)>,
-      uint16_t wid=0x8000);
+      std::function<bool(const Window&, Wid wid, const Splitter* cur_split)>,
+      Wid wid=0x8000);
 
-    void dump(Window, std::string indent="", uint16_t cur_wid=0x8000);
+    void dump(Window, std::string indent="", Wid cur_wid=0x8000);
     void dump2(Window);
 
   private:
@@ -156,7 +161,7 @@ class Vim : public TinyApp
     std::list<Buffer> buffers;
     std::unique_ptr<Window> curwin;
     Splitter splitter;
-    uint16_t curwid;
+    Wid curwid;
 };
 
 }
