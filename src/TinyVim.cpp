@@ -9,8 +9,8 @@ void error(const char* err)
   Term << TinyTerm::red << "error: " << err << TinyTerm::white << endl;
 }
 
-Vim::Vim(TinyTerm* term, std::string args)
-  : TinyApp(term), splitter('h', term->sy-2)
+Vim::Vim(TinyTerm* term, string args)
+  : TinyApp(term), splitter('h', term->sy-2), term(term)
 {
   curwid=0xC000; // above splitter
   if (term==nullptr or not term->isTerm() or term->sx==0 or term->sy==0)
@@ -18,12 +18,19 @@ Vim::Vim(TinyTerm* term, std::string args)
     terminate();
     return;
   }
+  term->saveCursor();
   term->getTermSize();
+  term->restoreCursor();
   // TODO should be a loop on all args
   *term << "vim started (" << args << ")" << endl;
   buffers[args].read(args.c_str());
   buffers[args].addWindow(curwid);
   buffers[args].redraw(curwid, term, &splitter);
+}
+
+void Vim::loop()
+{
+  
 }
 
 void Window::frame(TinyTerm& term)
@@ -83,12 +90,36 @@ void Buffer::reset()
   filename_.clear();
 }
 
+void Buffer::addWindow(Wid wid)
+{
+  if (getWBuff(wid)==nullptr)
+    wbuffs.insert({ wid, WindowBuffer(*this)});
+}
+
+WindowBuffer* Buffer::getWBuff(Wid wid)
+{
+  auto it=wbuffs.find(wid);
+  if (it == wbuffs.end()) return nullptr;
+
+  return &(it->second);
+}
+
+const string& Buffer::getLine(int line) const
+{
+  static string empty;
+  auto it=buffer.find(line);
+  if (it != buffer.end()) return it->second;
+  return empty;
+}
+
 void Buffer::redraw(Wid wid, TinyTerm* term, Splitter* splitter)
 {
   Window win(1,1,term->sx, term->sy);
   if (splitter->calcWindow(wid, win))
   {
-
+    auto wit=wbuffs.find(wid);
+    if (wit!=wbuffs.end())
+      wit->second.draw(win, *term);
   }
   else
     error("Buffer::redraw");
@@ -104,7 +135,7 @@ bool Buffer::read(const char* filename)
     error("Unable to open file");
     return false;
   }
-  std::string s;
+  string s;
   while (file.available())
   {
     auto c = file.read();
@@ -126,20 +157,46 @@ bool Buffer::read(const char* filename)
   return true;
 }
 
+WindowBuffer* Vim::getWBuff(Wid wid)
+{
+  for(auto buff: buffers)
+  {
+    WindowBuffer* wbuff = buff.second.getWBuff(wid);
+    if (wbuff) return wbuff;
+  }
+  return nullptr;
+}
+
 void Vim::onKey(TinyTerm::KeyCode key)
 {
-  if (key==TinyTerm::KEY_CTRL_C) terminate();
-  Term << F("vim key ") << key << endl;
+  if (key==TinyTerm::KEY_CTRL_C)
+  {
+    terminate();
+    return;
+  }
+  WindowBuffer *buff = getWBuff(curwid);
+  Window win(1,1, term->sx, term->sy);
+  if (buff and splitter.calcWindow(curwid, win))
+  {
+    buff->onKey(key);
+  }
+  else
+  {
+    term->saveCursor();
+    term->gotoxy(1,1);
+    *term << F("vim key ") << key << "   " << endl;
+    term->restoreCursor();
+  }
 }
 
 void Vim::onMouse(const TinyTerm::MouseEvent& e)
 {
 }
 
-
 Splitter::Splitter(bool vertical, uint16_t size)
   : side_1(nullptr), side_0(nullptr)
 {
+  Term << "ns" << endl;
   split_.vertical = vertical;
   split_.size = size;
 }
@@ -341,7 +398,7 @@ Wid Splitter::findWindow(Window& term, const Cursor& point)
   return win;
 }
 
-void Splitter::dump(Window from, std::string indent, Wid cur_wid)
+void Splitter::dump(Window from, string indent, Wid cur_wid)
 {
   Wid win_bit = cur_wid-(cur_wid & (cur_wid-1)); // (last bit of cur_wid)
   cur_wid |= win_bit>>1;
@@ -388,8 +445,26 @@ void Splitter::dump(Window from, std::string indent, Wid cur_wid)
     Term << indent << "wid_0:" << hex(wid_0) << ' ' << from << endl;
 }
 
-void WindowBuffer::draw(const Window& win, TinyTerm& term, Buffer& buff)
+void WindowBuffer::draw(const Window& win, TinyTerm& term)
 {
+  term.saveCursor();
+  term << TinyTerm::hide_cur;
+  for(uint16_t row=0; row<win.height-1; row++)
+  {
+    string s=buff.getLine(pos.row+row).substr(0, win.width);
+    term.gotoxy(win.top+row, win.left);
+    term << s;
+    if (win.width>s.length())
+      term << string(win.width-s.length(), ' ');
+    yield();
+  }
+  term.restoreCursor();
+  term << TinyTerm::show_cur;
+}
+
+void WindowBuffer::onKey(TinyTerm::KeyCode key)
+{
+  Term << " wbuff key " << key << endl;
 }
 
 void WindowBuffer::focus(TinyTerm& term)

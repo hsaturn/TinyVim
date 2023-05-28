@@ -37,12 +37,15 @@ struct Cursor
 class WindowBuffer
 {
   public:
-    void draw(const Window& win, TinyTerm& term, Buffer& buff);
+    WindowBuffer(Buffer& buffer) : buff(buffer) {}
+    void draw(const Window& win, TinyTerm& term);
     void focus(TinyTerm& term);
+    void onKey(TinyTerm::KeyCode key);
 
   private:
     Cursor pos;     // Top left of document
-    Cursor cursor;
+    Cursor cursor;  // Cursor position
+    Buffer& buff;
 };
 
 class Buffer
@@ -58,8 +61,9 @@ class Buffer
     const string& getLine(int line) const;
     unsigned int lines() const { return lines_; }
     bool modified() const { return modified_; }
-    void addWindow(Wid wid) { wbuffs[wid] = {};};
+    void addWindow(Wid wid);
     void removeWindow(Wid wid) { wbuffs.erase(wid); }
+    WindowBuffer* getWBuff(Wid wid);
 
   private:
     std::map<Wid, WindowBuffer> wbuffs;
@@ -149,11 +153,15 @@ class Vim : public TinyApp
     void onKey(TinyTerm::KeyCode) override;
     void onMouse(const TinyTerm::MouseEvent&) override;
 
+    void loop() override;
+
   private:
     void error(const char*);
+    WindowBuffer* getWBuff(Wid);
     std::map<string, Buffer> buffers;
     Splitter splitter;
     Wid curwid;
+    TinyTerm* term;
 };
 
 }
