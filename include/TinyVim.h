@@ -2,9 +2,8 @@
 #include <list>
 #include <memory>
 #include <map>
-
+#include "TinyApp.h"
 #include <LittleFS.h>
-#include <TinyApp.h>
 
 #define FS LittleFS
 
@@ -144,7 +143,7 @@ class Splitter
     Splitter* side_0 = nullptr; // right if vertical, down if not vertical
 };
 
-class Vim : public TinyApp
+class Vim : public tiny_bash::TinyApp
 {
   public:
     Vim(TinyTerm* term, string args);

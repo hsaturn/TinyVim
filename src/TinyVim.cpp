@@ -196,7 +196,6 @@ void Vim::onMouse(const TinyTerm::MouseEvent& e)
 Splitter::Splitter(bool vertical, uint16_t size)
   : side_1(nullptr), side_0(nullptr)
 {
-  Term << "ns" << endl;
   split_.vertical = vertical;
   split_.size = size;
 }
@@ -209,11 +208,9 @@ Splitter::~Splitter()
 
 bool Splitter::split(Wid wid, Window from, bool vertical, bool on_side_1, uint16_t size)
 {
-  Term << "--- split " << hex(wid) << ", sz=" << size << ", side=" << on_side_1 << endl;
   Splitter* splitter=this;
   if (calcWindow(wid, from, splitter))
   {
-    Term << "splitting " << from << endl;
     if ((vertical and from.width > size) or (not vertical and from.height > size))
     {
       // FIXME if side exists, vertical should be side.vertical
@@ -231,7 +228,6 @@ bool Splitter::split(Wid wid, Window from, bool vertical, bool on_side_1, uint16
     }
   }
 
-  Term << "split fail (bad win ?)" << endl;
   return false;
 }
 
