@@ -2,6 +2,7 @@
 #include <list>
 #include <memory>
 #include <map>
+#include <vector>
 #include "TinyApp.h"
 #include <LittleFS.h>
 
@@ -19,27 +20,41 @@ void error(const char*);
 class Splitter;
 class Buffer;
 class Window;
+class Vim;
+struct VimSettings;
 
 struct Cursor
 {
-  uint16_t row;
-  uint16_t col;
+  using type = int16_t;
+  type row;
+  type col;
   Cursor() : row(1), col(1) {}
-  Cursor(uint16_t row, uint16_t col) : row(row), col(col) {}
+  Cursor(type row, type col) : row(row), col(col) {}
   friend Stream& operator << (Stream& out, const Cursor& c)
   {
     out << '(' << c.row << ',' << c.col << ')';
     return out;
   }
+  friend bool operator == (const Cursor& l, const Cursor& r)
+  { return l.row==r.row and l.col==r.row; }
+  friend bool operator != (const Cursor& l, const Cursor& r)
+  { return not (l==r); }
+  friend Cursor operator+(const Cursor& l, const Cursor& r)
+  { return Cursor(l.row+r.row, l.col+r.col); }
+  friend Cursor operator-(const Cursor& l, const Cursor& r)
+  { return Cursor(l.row-r.row, l.col-r.col); }
 };
 
 class WindowBuffer
 {
   public:
     WindowBuffer(Buffer& buffer) : buff(buffer) {}
-    void draw(const Window& win, TinyTerm& term);
+    void draw(const Window& win, TinyTerm& term, uint16_t first=0, uint16_t last=0);
     void focus(TinyTerm& term);
-    void onKey(TinyTerm::KeyCode key);
+    void onKey(TinyTerm::KeyCode key, const Window&, const Vim&);
+    ~WindowBuffer() { Term << "~WindowBuffer "; }
+    Cursor buffCursor() const;  // compute position in file from pos and cursor (screen)
+    void gotoWord(int dir, Cursor&);
 
   private:
     Cursor pos;     // Top left of document
@@ -57,20 +72,23 @@ class Buffer
     void reset();
     bool read(const char* filename);
     bool save();
-    const string& getLine(int line) const;
-    unsigned int lines() const { return lines_; }
+    const string& getLine(Cursor::type line) const;
+    string& takeLine(Cursor::type line);
+    void insertLine(Cursor::type nr);
+    std::string deleteLine(Cursor::type nr);
+    Cursor::type lines() const;
     bool modified() const { return modified_; }
     void addWindow(Wid wid);
     void removeWindow(Wid wid) { wbuffs.erase(wid); }
     WindowBuffer* getWBuff(Wid wid);
+    ~Buffer() { Term << "~Buffer "; }
 
   private:
-    std::map<Wid, WindowBuffer> wbuffs;
+    std::map<Wid, std::unique_ptr<WindowBuffer>> wbuffs;
     std::map<unsigned int, string> buffer;
     bool modified_;
     char cr1=0; // crlf
     char cr2=0;
-    unsigned int lines_;
     string filename_;
 };
 
@@ -81,6 +99,7 @@ struct Window
   int16_t width;  // inner size (number of visible chars)
   int16_t height;
 
+  Window(){};
   Window(int16_t top, int16_t left, int16_t width, int16_t height)
   : top(top), left(left), width(width), height(height){}
 
@@ -129,7 +148,7 @@ class Splitter
     bool calcWindow(Wid, Window&, Splitter* start=nullptr);
     bool split(Wid, Window from, bool vertical, bool side_1, uint16_t size);
     void close(Wid);
-    void draw(Window win, Wid wid_base=0x8000);
+    void draw(Window win, TinyTerm& term, Wid wid_base=0x8000);
     bool forEachWindow(Window& from,
       std::function<bool(const Window&, Wid wid, const Splitter* cur_split)>,
       Wid wid=0x8000);
@@ -143,9 +162,21 @@ class Splitter
     Splitter* side_0 = nullptr; // right if vertical, down if not vertical
 };
 
+struct VimSettings
+{
+  uint8_t scrolloff = 0;
+  uint8_t sidescrolloff = 0;
+  uint8_t mode = 0;
+};
+
 class Vim : public tiny_bash::TinyApp
 {
   public:
+    using Record=std::vector<TinyTerm::KeyCode>;
+    enum 
+    {
+      VISUAL = 0, INSERT, REPLACE, COMMAND
+    };
     Vim(TinyTerm* term, string args);
     ~Vim() = default;
 
@@ -153,14 +184,23 @@ class Vim : public tiny_bash::TinyApp
     void onMouse(const TinyTerm::MouseEvent&) override;
 
     void loop() override;
+    TinyTerm& getTerm() const { return *term; }
 
+    VimSettings settings;
   private:
+    void play(const Record&, uint8_t count);
+    bool calcWindow(Wid, Window&);
     void error(const char*);
+    void setMode(uint8_t);
     WindowBuffer* getWBuff(Wid);
     std::map<string, Buffer> buffers;
     Splitter splitter;
     Wid curwid;
     TinyTerm* term;
+    uint8_t rpt_count=0;
+    bool last_digit=false;
+    Record  record;
+    bool playing=false;
 };
 
 }
