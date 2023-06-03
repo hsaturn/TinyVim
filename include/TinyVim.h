@@ -51,7 +51,8 @@ class WindowBuffer
     WindowBuffer(Buffer& buffer) : buff(buffer) {}
     void draw(const Window& win, TinyTerm& term, uint16_t first=0, uint16_t last=0);
     void focus(TinyTerm& term);
-    void onKey(TinyTerm::KeyCode key, const Window&, const Vim&);
+    // returns true if end of command
+    bool onKey(TinyTerm::KeyCode key, const std::string& eoc, const Window&, Vim&);
     ~WindowBuffer() { Term << "~WindowBuffer "; }
     Cursor buffCursor() const;  // compute position in file from pos and cursor (screen)
     void gotoWord(int dir, Cursor&);
@@ -174,6 +175,7 @@ class Vim : public tiny_bash::TinyApp
   public:
     using Record=std::vector<TinyTerm::KeyCode>;
     enum 
+
     {
       VISUAL = 0, INSERT, REPLACE, COMMAND
     };
@@ -187,6 +189,8 @@ class Vim : public tiny_bash::TinyApp
     TinyTerm& getTerm() const { return *term; }
 
     VimSettings settings;
+    std::string clip;
+
   private:
     void play(const Record&, uint8_t count);
     bool calcWindow(Wid, Window&);
@@ -198,9 +202,10 @@ class Vim : public tiny_bash::TinyApp
     Wid curwid;
     TinyTerm* term;
     uint8_t rpt_count=0;
-    bool last_digit=false;
+    bool last_was_digit=false;
     Record  record;
     bool playing=false;
+    std::string eoc;
 };
 
 }

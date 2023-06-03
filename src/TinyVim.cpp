@@ -238,9 +238,6 @@ bool Vim::calcWindow(Wid wid, Window& win)
 void Vim::play(const Record& rec, uint8_t count)
 {
   static int c=0;
-  term->saveCursor().gotoxy(1,120);
-  *term << "replay(" << c++ << ':' << count << ") ";
-  term->restoreCursor();
   playing = true;
   while(count)
   {
@@ -257,18 +254,7 @@ void Vim::onKey(TinyTerm::KeyCode key)
   *term << "recsize " << record.size() << ", rpt_count=" << rpt_count << ", play=" << playing << ", mode=" << settings.mode << "  ";
   term->restoreCursor();
 
-  if (key==TinyTerm::KEY_ESC)
-  {
-    if (record.size() and rpt_count and not playing)
-    {
-      record.push_back(key);
-      play(record, rpt_count-1);
-      rpt_count = 0;
-    }
-    setMode(VISUAL);
-    return;
-  }
-  if (key==TinyTerm::KEY_CTRL_C)
+ if (key==TinyTerm::KEY_CTRL_C)
   {
     terminate();
     return;
@@ -277,30 +263,26 @@ void Vim::onKey(TinyTerm::KeyCode key)
   {
     if (key>='0' and key<='9' and not playing)
     {
-      if (not last_digit)
-      {
-        rpt_count=0;
-        record.clear();
-      }
+      if (not last_was_digit) rpt_count=0;
       rpt_count = 10*rpt_count+key-'0';
       record.clear();
       term->saveCursor().gotoxy(4,120);
       *term << "record " << rpt_count << "  ";
       term->restoreCursor();
-      last_digit=true;
+      last_was_digit=true;
       return;
     }
-    last_digit=false;
+    last_was_digit=false;
     switch(key)
     {
       case 'i': case TinyTerm::KEY_INS: setMode(INSERT); return;
-      case 'r': setMode(REPLACE); return;
+      case 'R': setMode(REPLACE); return;
       case 'a': setMode(INSERT); key=TinyTerm::KEY_RIGHT; break;
       case '.': play(record, 1); return;
     }
   }
 
-  last_digit=false;
+  last_was_digit=false;
 
   if (not playing)
   {
@@ -310,21 +292,34 @@ void Vim::onKey(TinyTerm::KeyCode key)
 
   WindowBuffer *wbuff = getWBuff(curwid);
   Window win;
+  bool end_of_command = false;
   (1,1, term->sx, term->sy);
   if (wbuff and calcWindow(curwid, win))
   {
     if (key==TinyTerm::KEY_CTRL_L)
       wbuff->draw(win, *term);
     else
-      wbuff->onKey(key, win, *this);
+      end_of_command = wbuff->onKey(key, eoc, win, *this);
   }
-  else
+  if (not end_of_command) eoc.clear();
+  else if (settings.mode == VISUAL)
+    eoc += (char)key;
+ 
+  if (key==TinyTerm::KEY_ESC or end_of_command)  
   {
-    term->saveCursor();
-    term->gotoxy(1,1);
-    *term << F("vim key ") << key << "   " << endl;
-    term->restoreCursor();
+    if (record.size() and rpt_count and not playing)
+    {
+      record.push_back(key);
+      play(record, rpt_count-2);
+      rpt_count = 0;
+    }
+    setMode(VISUAL);
   }
+ term->saveCursor();
+ term->gotoxy(1, 1);
+ *term << F("vim key ") << key << ", eoc=" << eoc << ".   " << endl;
+ term->restoreCursor();
+ eoc += (char)key;
 }
 
 void Vim::onMouse(const TinyTerm::MouseEvent& e)
@@ -640,8 +635,9 @@ void WindowBuffer::gotoWord(int dir, Cursor& cursor)
   }
 }
 
-void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, const Vim& vim)
+bool WindowBuffer::onKey(TinyTerm::KeyCode key, const std::string& eoc, const Window& win, Vim& vim)
 {
+  bool end_of_command=true; // By default
   Cursor cdraw(0,0);
   static constexpr TinyTerm::KeyCode zero=(TinyTerm::KeyCode)0;
   const VimSettings& settings(vim.settings);
@@ -662,6 +658,7 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, const Vim& vi
       {
         buff.takeLine(buff_cur.row).erase(buff_cur.col);
         key=zero;
+        vim.onKey(TinyTerm::KEY_INS);
         break;
       }
       case 'J':
@@ -718,16 +715,27 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, const Vim& vi
       {
         switch(key)
         {
+          case 'd':
+          {
+            if (eoc=="d")
+            {
+              vim.clip = buff.deleteLine(buff_cur.row);
+              cdraw={ buff_cur.row, buff.lines() };     
+            }
+            else
+              end_of_command = false;
+            break;
+          }
           case 'w': gotoWord(1, buff_cur); break;
           case 'b': gotoWord(-1, buff_cur); break;
           default:
+            end_of_command = false;
             Term.saveCursor().gotoxy(2,100);
             Term << " normal key " << key << ' ';
             Term.restoreCursor();
         }
       }
   }
-  // FIXME yet enough
 
   if (cdraw.row) draw(win, vim.getTerm(), cdraw.row, cdraw.col);
   if (cursor.col==0) cursor.col=1;
@@ -738,6 +746,7 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, const Vim& vi
   {
     Term.gotoxy(cursor.row, cursor.col);
   }
+  return end_of_command;
 }
 
 void WindowBuffer::focus(TinyTerm& term)
