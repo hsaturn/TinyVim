@@ -12,6 +12,17 @@
 namespace tiny_vim
 {
 
+//                                       0         5          10        15         20             
+static constexpr const char* commands = "i,a,R,J,C,cw,x,p,U,.,o,h,j,k,l,w,b,$,G,yy,yw,dd,dw,q,n";
+enum class Command {
+      VIM_INSERT, VIM_APPEND, VIM_REPLACE, VIM_JOIN, VIM_CHANGE,
+      VIM_CHANGE_WORD, VIM_DELETE, VIM_PUT_AFTER, VIM_UNDO, VIM_REPEAT,
+      VIM_OPEN_LINE, VIM_MOVE_LEFT, VIM_MOVE_DOWN, VIM_MOVE_UP, VIM_MOVE_RIGHT,
+      VIM_NEXT_WORD, VIM_PREV_WORD, VIM_MOVE_LINE_END, VIM_MOVE_DOC_END, VIM_COPY_LINE,
+      VIM_COPY_WORD, VIM_DELETE_LINE, VIM_DELETE_WORD, VIM_QUIT, VIM_SEARCH_NEXT,
+      VIM_UNKNOWN, VIM_UNTERMINATED
+};
+
 using Wid=uint16_t;
 using string=std::string;
 
@@ -36,30 +47,36 @@ struct Cursor
     return out;
   }
   friend bool operator == (const Cursor& l, const Cursor& r)
-  { return l.row==r.row and l.col==r.row; }
+  { return l.row==r.row and l.col==r.col; }
   friend bool operator != (const Cursor& l, const Cursor& r)
   { return not (l==r); }
   friend Cursor operator+(const Cursor& l, const Cursor& r)
   { return Cursor(l.row+r.row, l.col+r.col); }
   friend Cursor operator-(const Cursor& l, const Cursor& r)
   { return Cursor(l.row-r.row, l.col-r.col); }
+  Cursor& operator -=(const Cursor& c)
+  { row -= c.row; col -= c.col; return *this; }
+  Cursor& operator +=(const Cursor& c)
+  { row += c.row; col += c.col; return *this; }
 };
 
 class WindowBuffer
 {
   public:
-    WindowBuffer(Buffer& buffer) : buff(buffer) {}
+    WindowBuffer(Buffer& buffer) : pos(1,1), buff(buffer) { cursor=pos; }
     void draw(const Window& win, TinyTerm& term, uint16_t first=0, uint16_t last=0);
     void focus(TinyTerm& term);
     // returns true if end of command
-    bool onKey(TinyTerm::KeyCode key, const std::string& eoc, const Window&, Vim&);
+    void onKey(TinyTerm::KeyCode, const Window&, Vim&);
+    void execCmd(Command, const Window&, Vim&);
     ~WindowBuffer() { Term << "~WindowBuffer "; }
     Cursor buffCursor() const;  // compute position in file from pos and cursor (screen)
     void gotoWord(int dir, Cursor&);
 
   private:
-    Cursor pos;     // Top left of document
-    Cursor cursor;  // Cursor position
+    void validateCursor(const Window& win, Vim& term);
+    Cursor pos;     // Top left of document (min is 1,1)
+    Cursor cursor;  // Cursor position (1,1 is top left)
     Buffer& buff;
 };
 
@@ -114,6 +131,7 @@ struct Window
   }
 
   void frame(TinyTerm& term);
+  static void calcSplitWids(Wid in, Wid& wid_0, Wid& wid_1);
 };
 
 /*
@@ -147,7 +165,7 @@ class Splitter
     Wid findWindow(Window&, const Cursor&);
     // care : Window is modified
     bool calcWindow(Wid, Window&, Splitter* start=nullptr);
-    bool split(Wid, Window from, bool vertical, bool side_1, uint16_t size);
+    bool split(Wid, char v_h, uint16_t size);
     void close(Wid);
     void draw(Window win, TinyTerm& term, Wid wid_base=0x8000);
     bool forEachWindow(Window& from,
@@ -165,7 +183,7 @@ class Splitter
 
 struct VimSettings
 {
-  uint8_t scrolloff = 0;
+  uint8_t scrolloff = 5;
   uint8_t sidescrolloff = 0;
   uint8_t mode = 0;
 };
@@ -174,11 +192,8 @@ class Vim : public tiny_bash::TinyApp
 {
   public:
     using Record=std::vector<TinyTerm::KeyCode>;
-    enum 
+    enum { VISUAL = 0, INSERT, REPLACE, COMMAND };
 
-    {
-      VISUAL = 0, INSERT, REPLACE, COMMAND
-    };
     Vim(TinyTerm* term, string args);
     ~Vim() = default;
 
@@ -189,13 +204,17 @@ class Vim : public tiny_bash::TinyApp
     TinyTerm& getTerm() const { return *term; }
 
     VimSettings settings;
-    std::string clip;
+
+    void clip(const std::string&);
+    const std::string& clipboard() const { return clipboard_; }
 
   private:
     void play(const Record&, uint8_t count);
     bool calcWindow(Wid, Window&);
     void error(const char*);
     void setMode(uint8_t);
+    Command getCommand(const char* command);
+
     WindowBuffer* getWBuff(Wid);
     std::map<string, Buffer> buffers;
     Splitter splitter;
@@ -205,7 +224,8 @@ class Vim : public tiny_bash::TinyApp
     bool last_was_digit=false;
     Record  record;
     bool playing=false;
-    std::string eoc;
+    std::string scmd;
+    std::string clipboard_;
 };
 
 }
