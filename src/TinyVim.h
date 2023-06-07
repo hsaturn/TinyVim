@@ -12,15 +12,15 @@
 namespace tiny_vim
 {
 
-//                                       0         5          10        15         20             
-static constexpr const char* commands = "i,a,R,J,C,cw,x,p,U,.,o,h,j,k,l,w,b,$,G,yy,yw,dd,dw,q,n";
+//                                       0         5            10        15         20            25 
+static constexpr const char* commands = "i,a,R,J,C,cw,x,p,P,U,.,o,h,j,k,l,w,b,$,G,yy,yw,dd,dw,dt,q,n";
 enum class Command {
       VIM_INSERT, VIM_APPEND, VIM_REPLACE, VIM_JOIN, VIM_CHANGE,
-      VIM_CHANGE_WORD, VIM_DELETE, VIM_PUT_AFTER, VIM_UNDO, VIM_REPEAT,
+      VIM_CHANGE_WORD, VIM_DELETE, VIM_PUT_AFTER, VIM_PUT_BEFORE, VIM_UNDO, VIM_REPEAT,
       VIM_OPEN_LINE, VIM_MOVE_LEFT, VIM_MOVE_DOWN, VIM_MOVE_UP, VIM_MOVE_RIGHT,
       VIM_NEXT_WORD, VIM_PREV_WORD, VIM_MOVE_LINE_END, VIM_MOVE_DOC_END, VIM_COPY_LINE,
-      VIM_COPY_WORD, VIM_DELETE_LINE, VIM_DELETE_WORD, VIM_QUIT, VIM_SEARCH_NEXT,
-      VIM_UNKNOWN, VIM_UNTERMINATED
+      VIM_COPY_WORD, VIM_DELETE_LINE, VIM_DELETE_WORD, VIM_QUIT, VIM_DELETE_TILL,
+      VIM_SEARCH_NEXT, VIM_UNKNOWN, VIM_UNTERMINATED
 };
 
 using Wid=uint16_t;
@@ -207,12 +207,12 @@ class Vim : public tiny_bash::TinyApp
 
     void clip(const std::string&);
     const std::string& clipboard() const { return clipboard_; }
+    void setMode(uint8_t);
 
   private:
     void play(const Record&, uint8_t count);
     bool calcWindow(Wid, Window&);
     void error(const char*);
-    void setMode(uint8_t);
     Command getCommand(const char* command);
 
     WindowBuffer* getWBuff(Wid);
