@@ -13,14 +13,14 @@ namespace tiny_vim
 {
 
 //                                       0         5            10        15         20            25 
-static constexpr const char* commands = "i,a,R,J,C,cw,x,p,P,U,.,o,h,j,k,l,w,b,$,G,yy,yw,dd,dw,dt,q,n";
-enum class Command {
+static constexpr const char* actions = "i,a,R,J,C,cw,x,p,P,U,.,o,h,j,k,l,w,b,$,G,yy,yw,dd,dw,dt,q,0:^,n";
+enum class Action {
       VIM_INSERT, VIM_APPEND, VIM_REPLACE, VIM_JOIN, VIM_CHANGE,
       VIM_CHANGE_WORD, VIM_DELETE, VIM_PUT_AFTER, VIM_PUT_BEFORE, VIM_UNDO, VIM_REPEAT,
       VIM_OPEN_LINE, VIM_MOVE_LEFT, VIM_MOVE_DOWN, VIM_MOVE_UP, VIM_MOVE_RIGHT,
       VIM_NEXT_WORD, VIM_PREV_WORD, VIM_MOVE_LINE_END, VIM_MOVE_DOC_END, VIM_COPY_LINE,
       VIM_COPY_WORD, VIM_DELETE_LINE, VIM_DELETE_WORD, VIM_QUIT, VIM_DELETE_TILL,
-      VIM_SEARCH_NEXT, VIM_UNKNOWN, VIM_UNTERMINATED
+      VIM_MOVE_LINE_BEGIN, VIM_SEARCH_NEXT, VIM_UNKNOWN, VIM_UNTERMINATED
 };
 
 using Wid=uint16_t;
@@ -68,7 +68,7 @@ class WindowBuffer
     void focus(TinyTerm& term);
     // returns true if end of command
     void onKey(TinyTerm::KeyCode, const Window&, Vim&);
-    void execCmd(Command, const Window&, Vim&);
+    void onAction(Action, const Window&, Vim&);
     ~WindowBuffer() { Term << "~WindowBuffer "; }
     Cursor buffCursor() const;  // compute position in file from pos and cursor (screen)
     void gotoWord(int dir, Cursor&);
@@ -192,7 +192,14 @@ class Vim : public tiny_bash::TinyApp
 {
   public:
     using Record=std::vector<TinyTerm::KeyCode>;
-    enum { VISUAL = 0, INSERT, REPLACE, COMMAND };
+    enum {
+      VISUAL = 0,
+      COMMAND = 1,
+      INSERT = 2,
+      REPLACE = 3,
+      EDIT_MODE = 2,  // Mask for replace or insert (editions modes)
+    };
+
 
     Vim(TinyTerm* term, string args);
     ~Vim() = default;
@@ -213,7 +220,7 @@ class Vim : public tiny_bash::TinyApp
     void play(const Record&, uint8_t count);
     bool calcWindow(Wid, Window&);
     void error(const char*);
-    Command getCommand(const char* command);
+    Action getAction(const char* command);
 
     WindowBuffer* getWBuff(Wid);
     std::map<string, Buffer> buffers;

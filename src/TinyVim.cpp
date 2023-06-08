@@ -32,27 +32,28 @@ void error(const char* err)
   Term << TinyTerm::red << "Error: " << err << TinyTerm::white << endl;
 }
 
-Command Vim::getCommand(const char* command)
+Action Vim::getAction(const char* command)
 {
-  const char* cmd(commands);
-  int cmdIndex = 0;
+  const char* action(actions);
+  int actionIndex = 0;
 
-  while (*cmd) {
+  while (*action) {
       const char* commandIter = command;
 
-      while (*commandIter and (*cmd == *commandIter))
-      { ++cmd; ++commandIter; }
-      if ((*cmd==0 or *cmd==',') and *commandIter==0)
-        return (Command)cmdIndex;
-      if (*commandIter==0) return Command::VIM_UNTERMINATED;
+      while (*commandIter and (*action == *commandIter))
+      { ++action; ++commandIter; }
+      if ((*action==0 or *action==',' or *action==':') and *commandIter==0)
+        return (Action)actionIndex;
+      if (*action==':') { action++; continue; }
+      if (*commandIter==0) return Action::VIM_UNTERMINATED;
 
-      while (*cmd && *cmd != ',') ++cmd;
-      if (*cmd) cmd++;
+      while (*action && *action != ',') ++action;
+      if (*action) action++;
 
-      ++cmdIndex;
+      ++actionIndex;
   }
 
-  return Command::VIM_UNKNOWN;
+  return Action::VIM_UNKNOWN;
 }
 
 Vim::Vim(TinyTerm* term, string args)
@@ -214,7 +215,10 @@ void Buffer::redraw(Wid wid, TinyTerm* term, Splitter* splitter)
   {
     auto wit=wbuffs.find(wid);
     if (wit!=wbuffs.end())
+    {
       wit->second->draw(win, *term);
+      wit->second->focus(*term);
+    }
   }
   else
     error("Buffer::redraw");
@@ -304,7 +308,7 @@ void Vim::clip(const std::string& buff)
 
 void Vim::onKey(TinyTerm::KeyCode key)
 {
-  Command cmd = Command::VIM_UNKNOWN;
+  Action cmd = Action::VIM_UNKNOWN;
   vdebug("vimkey", "recsize " << record.size() << ", rpt_count=" << rpt_count << ", play=" << playing << ", mode=" << settings.mode << "  ");
 
   if (key == TinyTerm::KEY_ESC)
@@ -312,10 +316,10 @@ void Vim::onKey(TinyTerm::KeyCode key)
     setMode(VISUAL);
     return;
   }
-  else if (key==TinyTerm::KEY_LEFT) cmd=Command::VIM_MOVE_LEFT;
-  else if (key==TinyTerm::KEY_RIGHT) cmd=Command::VIM_MOVE_RIGHT;
-  else if (key==TinyTerm::KEY_UP) cmd=Command::VIM_MOVE_UP;
-  else if (key==TinyTerm::KEY_DOWN) cmd=Command::VIM_MOVE_DOWN;
+  else if (key==TinyTerm::KEY_LEFT) cmd=Action::VIM_MOVE_LEFT;
+  else if (key==TinyTerm::KEY_RIGHT) cmd=Action::VIM_MOVE_RIGHT;
+  else if (key==TinyTerm::KEY_UP) cmd=Action::VIM_MOVE_UP;
+  else if (key==TinyTerm::KEY_DOWN) cmd=Action::VIM_MOVE_DOWN;
   else if (key==TinyTerm::KEY_CTRL_C)
   {
     terminate();
@@ -329,6 +333,7 @@ void Vim::onKey(TinyTerm::KeyCode key)
 
   vdebug("vcmd", (int)cmd);
 
+  Wid wid=settings.mode==COMMAND ? 0x4000 : curwid;
   WindowBuffer *wbuff = getWBuff(curwid);
   Window win;
   vdebug("vcalc_win", win);
@@ -338,8 +343,13 @@ void Vim::onKey(TinyTerm::KeyCode key)
   {
     vdebug("vcalc_bad", curwid);
   }
+
+  if (key==':' & (settings.mode & EDIT_MODE)==0)
+  {
+    settings.mode = COMMAND;
+  }
   
-  if (settings.mode == VISUAL or cmd!=Command::VIM_UNKNOWN)
+  if (settings.mode == COMMAND or settings.mode == VISUAL or cmd!=Action::VIM_UNKNOWN)
   {
     if (key>='0' and key<='9' and not playing)
     {
@@ -351,34 +361,34 @@ void Vim::onKey(TinyTerm::KeyCode key)
       return;
     }
     last_was_digit=false;
-    if ((key>='a' and key<='z') or (key>='A' and key<='Z') or (key=='$'))
+    if ((key>=' ' and key<256 and key!=':'))
     {
       scmd += (char)key;
-      cmd = getCommand(scmd.c_str());
+      cmd = getAction(scmd.c_str());
       vdebug("scmd", scmd);
       switch(cmd)
       {
-        case Command::VIM_INSERT: setMode(INSERT); break;
-        case Command::VIM_REPLACE: setMode(REPLACE); break;
-        case Command::VIM_REPEAT: play(record, 1); break;
-        case Command::VIM_UNKNOWN:
+        case Action::VIM_INSERT: setMode(INSERT); break;
+        case Action::VIM_REPLACE: setMode(REPLACE); break;
+        case Action::VIM_REPEAT: play(record, 1); break;
+        case Action::VIM_UNKNOWN:
           scmd.clear();
           break;
-        case Command::VIM_UNTERMINATED:
+        case Action::VIM_UNTERMINATED:
           vdebug("unterminated", scmd);
           return;
         default:
           if (wbuff)
           {
-            wbuff->execCmd(cmd, win, *this);
+            wbuff->onAction(cmd, win, *this);
           }
           break;
       }
       scmd.clear();
       return;
     }
-    else if (wbuff and cmd!=Command::VIM_UNKNOWN)
-      wbuff->execCmd(cmd, win, *this);
+    else if (wbuff and cmd!=Action::VIM_UNKNOWN)
+      wbuff->onAction(cmd, win, *this);
 
     switch(key)
     {
@@ -722,7 +732,7 @@ void WindowBuffer::gotoWord(int dir, Cursor& cursor)
   cursor.col++;
 }
 
-void WindowBuffer::execCmd(Command cmd, const Window& win, Vim& vim)
+void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
 {
   Cursor buff_cur(buffCursor());
   Cursor redraw(0,0);           // (line_to_redraw / lines to redraw)
@@ -736,15 +746,15 @@ void WindowBuffer::execCmd(Command cmd, const Window& win, Vim& vim)
   std::string& line=buff.takeLine(buff_cur.row);
   switch(cmd)
   {
-    case Command::VIM_CHANGE:
+    case Action::VIM_CHANGE:
       vim.clip(line.substr(buff_cur.col));
       line.erase(buff_cur.col);
       vim.onKey(TinyTerm::KEY_INS);
       break;
-    case Command::VIM_PUT_BEFORE:
-    case Command::VIM_PUT_AFTER:
+    case Action::VIM_PUT_BEFORE:
+    case Action::VIM_PUT_AFTER:
     {
-      bool after = cmd==Command::VIM_PUT_AFTER;
+      bool after = cmd==Action::VIM_PUT_AFTER;
       std::string clip=vim.clipboard();
       size_t cr=clip.find('\r');
       if (cr!=std::string::npos)
@@ -771,11 +781,12 @@ void WindowBuffer::execCmd(Command cmd, const Window& win, Vim& vim)
       }
       break;
     }
-    case Command::VIM_DELETE:
+    case Action::VIM_DELETE:
       vim.clip(line.substr(buff_cur.col-1,1));
       line.erase(buff_cur.col-1,1);
+      if (buff_cur.col>line.length()) buff_cur.col--;
       break;
-    case Command::VIM_JOIN:
+    case Action::VIM_JOIN:
     {
       std::string s=buff.deleteLine(buff_cur.row+1);
       if (line.length() and line[line.length()-1]==' ') line.erase(line.length()-1,1);
@@ -784,48 +795,43 @@ void WindowBuffer::execCmd(Command cmd, const Window& win, Vim& vim)
       redraw={ buff_cur.row, buff.lines() };
       break;
     }
-    case Command::VIM_COPY_WORD: break;   // FIXME
-    case Command::VIM_DELETE_WORD: break; // FIXME
-    case Command::VIM_COPY_LINE: vim.clip(line+'\r'); break;
-    case Command::VIM_DELETE_LINE:
+    case Action::VIM_COPY_WORD: break;   // FIXME
+    case Action::VIM_DELETE_WORD: break; // FIXME
+    case Action::VIM_COPY_LINE: vim.clip(line+'\r'); break;
+    case Action::VIM_DELETE_LINE:
       vim.clip(line+'\r');
       buff.deleteLine(buff_cur.row);
       redraw.col=buff.lines();
       break;
-    case Command::VIM_APPEND: vim.setMode(Vim::INSERT);
-    case Command::VIM_MOVE_RIGHT: buff_cur.col++; redraw.row=0; break;
-    case Command::VIM_MOVE_LEFT: buff_cur.col--; redraw.row=0; break;
-    case Command::VIM_MOVE_UP: buff_cur.row--; redraw.row=0; break;
-    case Command::VIM_OPEN_LINE: buff_cur.col=1; buff.insertLine(++buff_cur.row); redraw.col=buff.lines(); break;
-    case Command::VIM_MOVE_DOWN: buff_cur.row++; redraw.row=0; break;
-    case Command::VIM_MOVE_LINE_END: buff_cur.col=line.length(); break;
-    case Command::VIM_MOVE_DOC_END: buff_cur.row=buff.lines(); break;
-    case Command::VIM_NEXT_WORD: gotoWord(1, buff_cur); break;
-    case Command::VIM_PREV_WORD: gotoWord(-1, buff_cur); break;
+    case Action::VIM_OPEN_LINE:
+      buff_cur.col=1;
+      buff.insertLine(++buff_cur.row);
+      vim.setMode(Vim::INSERT);
+      redraw.col=buff.lines();
+      break;
+    case Action::VIM_APPEND: vim.setMode(Vim::INSERT);
+    case Action::VIM_MOVE_RIGHT: buff_cur.col++; redraw.row=0; break;
+    case Action::VIM_MOVE_LEFT: buff_cur.col--; redraw.row=0; break;
+    case Action::VIM_MOVE_UP: buff_cur.row--; redraw.row=0; break;
+    case Action::VIM_MOVE_DOWN: buff_cur.row++; redraw.row=0; break;
+    case Action::VIM_MOVE_LINE_END: buff_cur.col=line.length(); redraw.row=0; break;
+    case Action::VIM_MOVE_LINE_BEGIN: buff_cur.col=1; redraw.row=0; break;
+    case Action::VIM_MOVE_DOC_END: buff_cur.row=buff.lines(); break;
+    case Action::VIM_NEXT_WORD: gotoWord(1, buff_cur); break;
+    case Action::VIM_PREV_WORD: gotoWord(-1, buff_cur); break;
   }
   if (redraw.row) draw(win, vim.getTerm(), redraw.row, redraw.row+redraw.col);
   buff_cur -= buffCursor();
-  vdebug("delta_cur", buff_cur);
   cursor += buff_cur;
   validateCursor(win, vim);
-  Term.gotoxy(cursor.row, cursor.col);
 }
 
 void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
 {
-  Cursor cdraw(0,0);
-  static constexpr TinyTerm::KeyCode zero=(TinyTerm::KeyCode)0;
   const VimSettings& settings(vim.settings);
+  Cursor cdraw(0,0);
   Cursor buff_cur(buffCursor());
 
-  if (settings.mode==Vim::VISUAL)
-  {
-    switch(key)
-    {
-      case 'x': key=TinyTerm::KEY_SUPPR; break;
-      case '$': key=TinyTerm::KEY_END; break;
-   }
-  }
   vdebug("ket", key);
   switch(key)
   {
@@ -837,15 +843,15 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
         buff.insertLine(buff_cur.row+1);
         buff.takeLine(buff_cur.row)=s.substr(0, buff_cur.col-1);
         buff.takeLine(buff_cur.row+1)=s.substr(buff_cur.col-1);
+        cdraw={ buff_cur.row, buff.lines()};
       }
       cursor.row++;
       cursor.col=1;
-      cdraw={ buff_cur.row, buff.lines()};
     }
     case TinyTerm::KEY_HOME: pos.col=1; cursor.col=1; break;
     case TinyTerm::KEY_END: cursor.col=buff.getLine(buff_cur.row).length(); break;
-   default:
-      if (settings.mode==Vim::INSERT or settings.mode==Vim::REPLACE)
+    default:
+      if (settings.mode & Vim::EDIT_MODE)
       {
         std::string& s=buff.takeLine(buff_cur.row);
         while(s.length()<buff_cur.col) s+=' ';
@@ -856,22 +862,10 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
         cdraw.row=buff_cur.row;
         cursor.col++;
       }
-      else
-      {
-        switch(key)
-        {
-          case 'd':
-          {
-          }
-          default:
-            vdebug("norm key", key);
-        }
-      }
   }
 
   if (cdraw.row) draw(win, vim.getTerm(), cdraw.row, cdraw.col);
   validateCursor(win, vim);
-  Term.gotoxy(cursor.row, cursor.col);
 }
 
 void adjust(Cursor::type& cursor, Cursor::type& pos, Cursor::type max, int scroll)
@@ -925,6 +919,7 @@ void WindowBuffer::validateCursor(const Window& win, Vim& vim)
     draw(win, vim.getTerm());
   }
   else vdebug("val_draw", 'n' << pos << '/' << old_pos);
+  vim.getTerm().gotoxy(cursor.row, cursor.col);  // FIXME
 }
 
 void WindowBuffer::focus(TinyTerm& term)
