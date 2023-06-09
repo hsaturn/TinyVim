@@ -866,8 +866,10 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
   Cursor buff_cur(buffCursor());
   Cursor redraw(0,0);           // (line_to_redraw / lines to redraw)
   redraw.row = buff_cur.row;    // Redraw current line by default
+  Cursor del_from(0,0);
+  int8_t mode=-1;
 
-  vdebug("w.pos", pos);
+  vdebug("w.cmd", (int)cmd);
   vdebug("w.cursor", cursor);
   vdebug("w.buff_cur", buff_cur);
   vdebug("buff.lines", buff.lines());
@@ -925,7 +927,6 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
       break;
     }
     case Action::VIM_COPY_WORD: break;   // FIXME
-    case Action::VIM_DELETE_WORD: break; // FIXME
     case Action::VIM_COPY_LINE: vim.clip(line+'\r'); break;
     case Action::VIM_DELETE_LINE:
       vim.clip(line+'\r');
@@ -935,10 +936,10 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
     case Action::VIM_OPEN_LINE:
       buff_cur.col=1;
       buff.insertLine(++buff_cur.row);
-      vim.setMode(Vim::INSERT);
+      mode=Vim::INSERT;
       redraw.col=buff.lines();
       break;
-    case Action::VIM_APPEND: vim.setMode(Vim::INSERT);
+    case Action::VIM_APPEND: mode=Vim::INSERT;
     case Action::VIM_MOVE_RIGHT: buff_cur.col++; redraw.row=0; break;
     case Action::VIM_MOVE_LEFT: buff_cur.col--; redraw.row=0; break;
     case Action::VIM_MOVE_UP: buff_cur.row--; redraw.row=0; break;
@@ -946,8 +947,19 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
     case Action::VIM_MOVE_LINE_END: buff_cur.col=line.length(); redraw.row=0; break;
     case Action::VIM_MOVE_LINE_BEGIN: buff_cur.col=1; redraw.row=0; break;
     case Action::VIM_MOVE_DOC_END: buff_cur.row=buff.lines(); break;
+    case Action::VIM_CHANGE_WORD: mode=Vim::INSERT;
+    case Action::VIM_DELETE_WORD: del_from = buff_cur;
     case Action::VIM_NEXT_WORD: gotoWord(1, buff_cur); break;
     case Action::VIM_PREV_WORD: gotoWord(-1, buff_cur); break;
+  }
+  if (mode>=0) vim.setMode(mode);
+  if (del_from.row)
+  {
+    if (buff_cur.row==del_from.row)
+      line.erase(del_from.col-1, buff_cur.col-del_from.col);
+    else
+      line.erase(del_from.col-1);
+    buff_cur = del_from;
   }
   if (redraw.row) draw(win, vim.getTerm(), redraw.row, redraw.row+redraw.col);
   buff_cur -= buffCursor();
