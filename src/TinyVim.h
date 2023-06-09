@@ -12,7 +12,7 @@
 namespace tiny_vim
 {
 
-//                                       0         5            10        15         20            25 
+//                                      0         5            10        15         20            25
 static constexpr const char* actions = "i,a,R,J,C,cw,x,p,P,U,.,o,h,j,k,l,w,b,$,G,yy,yw,dd,dw,dt,q,0:^,n";
 enum class Action {
       VIM_INSERT, VIM_APPEND, VIM_REPLACE, VIM_JOIN, VIM_CHANGE,
@@ -30,7 +30,7 @@ void error(const char*);
 
 class Splitter;
 class Buffer;
-class Window;
+struct Window;
 class Vim;
 struct VimSettings;
 
@@ -203,7 +203,7 @@ class Vim : public tiny_bash::TinyApp
     };
 
 
-    Vim(TinyTerm* term, string args);
+    Vim(TinyTerm* term, const tiny_bash::TinyEnv& e, string args);
     ~Vim() = default;
 
     void onKey(TinyTerm::KeyCode) override;
@@ -219,6 +219,7 @@ class Vim : public tiny_bash::TinyApp
     void setMode(uint8_t);
 
   private:
+    void drawSplitter();
     void play(const Record&, uint8_t count);
     bool calcWindow(Wid, Window&);
     void error(const char*);

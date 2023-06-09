@@ -33,32 +33,47 @@ void error(const char* err)
   Term << TinyTerm::red << "Error: " << err << TinyTerm::white << endl;
 }
 
-Action Vim::getAction(const char* command)
+// Search index of string in indexes
+// return 0..n index of string
+//    or -1 not found
+//    or -2 found but not terminated
+int16_t getIndex(const char* haystack, const char* needle)
 {
-  const char* action(actions);
-  int actionIndex = 0;
+  const char* hayPtr(haystack);
+  int16_t index = 0;
 
-  while (*action) {
-      const char* commandIter = command;
+  while (*hayPtr) {
+      const char* needlePtr = needle;
 
-      while (*commandIter and (*action == *commandIter))
-      { ++action; ++commandIter; }
-      if ((*action==0 or *action==',' or *action==':') and *commandIter==0)
-        return (Action)actionIndex;
-      if (*action==':') { action++; continue; }
-      if (*commandIter==0) return Action::VIM_UNTERMINATED;
+      while (*needlePtr and (*hayPtr == *needlePtr))
+      { ++hayPtr; ++needlePtr; }
+      if ((*hayPtr==0 or *hayPtr==',' or *hayPtr==':') and *needlePtr==0)
+        return index;
+      if (*hayPtr==':') { hayPtr++; continue; }
+      if (*needlePtr==0) return -2;
 
-      while (*action && *action != ',') ++action;
-      if (*action) action++;
+      while (*hayPtr && *hayPtr != ',') ++hayPtr;
+      if (*hayPtr) hayPtr++;
 
-      ++actionIndex;
+      ++index;
   }
 
-  return Action::VIM_UNKNOWN;
+  return -1;
 }
 
-Vim::Vim(TinyTerm* term, string args)
-  : TinyApp(term), splitter('h', term->sy-3), term(term)
+Action Vim::getAction(const char* action)
+{
+  int16_t index=getIndex(actions, action);
+  if (index==-1) return Action::VIM_UNKNOWN;
+  if (index==-2) return Action::VIM_UNTERMINATED;
+  return (Action)index;
+}
+
+
+
+Vim::Vim(TinyTerm* term, const tiny_bash::TinyEnv& e, string args)
+  : TinyApp(term,e)
+  , splitter('h', term->sy-3), term(term)
 {
   term->gotoxy(26, 100);
   *term << "TERM.sy-3=" << term->sy-3 << endl;
@@ -79,8 +94,7 @@ Vim::Vim(TinyTerm* term, string args)
   term->getTermSize();
   term->restoreCursor();
   // TODO should be a loop on all args
-  Window split_win(1,1,term->sx, term->sy);
-  splitter.draw(split_win, *term);
+  drawSplitter();
   buffers[args].read(args.c_str());
   buffers[args].setFileName(args.c_str());
   buffers[args].addWindow(curwid);
@@ -88,6 +102,12 @@ Vim::Vim(TinyTerm* term, string args)
 
   buffers[":"].addWindow(0x4000);
   buffers[":"].redraw(0x4000, term, &splitter);
+}
+
+void Vim::drawSplitter()
+{
+  Window split_win(1,1,term->sx, term->sy);
+  splitter.draw(split_win, *term);
 }
 
 void Vim::loop()
@@ -291,6 +311,11 @@ bool Buffer::save(std::string filename, bool force)
 bool WindowBuffer::save(const std::string& filename, bool force)
 {
   return buff.save(filename, force);
+}
+
+void Vim::error(const char* err)
+{
+  tiny_vim::error(err); // FIXME
 }
 
 WindowBuffer* Vim::getWBuff(Wid wid)
