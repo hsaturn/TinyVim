@@ -982,7 +982,6 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
   {
     case TinyTerm::KEY_RETURN:
     {
-      string s = buff.getLine(buff_cur.row);
       if (settings.mode==Vim::INSERT)
       {
         buff.insertLine(buff_cur.row+1);
@@ -993,6 +992,13 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
       cursor.row++;
       cursor.col=1;
     }
+    case TinyTerm::KEY_BACK:
+      if (pos.col <= s.length())
+      {
+        if (edit_mode) s.erase(pos.col-1, 1);
+        cursor.col--;
+      }
+      break;
     case TinyTerm::KEY_HOME: pos.col=1; cursor.col=1; break;
     case TinyTerm::KEY_END: pos.col=buff.getLine(buff_cur.row).length(); break;
     case TinyTerm::KEY_CTRL_I:  // tab
