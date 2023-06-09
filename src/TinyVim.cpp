@@ -969,11 +969,15 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
 
 void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
 {
+  uint8_t count=1;
   const VimSettings& settings(vim.settings);
   Cursor cdraw(0,0);
   Cursor buff_cur(buffCursor());
 
-  vdebug("ket", key);
+  string s = buff.getLine(buff_cur.row);
+  bool edit_mode = settings.mode & Vim::EDIT_MODE;
+
+  vdebug("key", key << " bufflines " << buff.lines());
   switch(key)
   {
     case TinyTerm::KEY_RETURN:
@@ -990,16 +994,24 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
       cursor.col=1;
     }
     case TinyTerm::KEY_HOME: pos.col=1; cursor.col=1; break;
-    case TinyTerm::KEY_END: cursor.col=buff.getLine(buff_cur.row).length(); break;
+    case TinyTerm::KEY_END: pos.col=buff.getLine(buff_cur.row).length(); break;
+    case TinyTerm::KEY_CTRL_I:  // tab
+      if (not settings.mode & Vim::EDIT_MODE) break;
+      if (vim.settings.ts == 0) break;
+      count = pos.col % vim.settings.ts;
+      if (count==0) count=vim.settings.ts;
     default:
-      if (settings.mode & Vim::EDIT_MODE)
+      if (key>=' ' && edit_mode)
       {
         std::string& s=buff.takeLine(buff_cur.row);
         while(s.length()<buff_cur.col) s+=' ';
-        if (s.length()<buff_cur.col or settings.mode==Vim::INSERT)
-          s.insert(buff_cur.col-1, 1, key);
-        else
-          s[buff_cur.col-1]=key;
+        while(count--)
+        {
+          if (s.length()<buff_cur.col or settings.mode==Vim::INSERT)
+            s.insert(buff_cur.col-1, 1, key);
+          else
+            s[buff_cur.col-1]=key;
+        }
         cdraw.row=buff_cur.row;
         cursor.col++;
       }
