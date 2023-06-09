@@ -411,7 +411,8 @@ void Vim::onKey(TinyTerm::KeyCode key)
 
   if (key == TinyTerm::KEY_ESC)
   {
-    setMode(VISUAL);
+    record.clear(); // FIXME
+    setMode(NORMAL);
     return;
   }
   else if (key==TinyTerm::KEY_LEFT) cmd=Action::VIM_MOVE_LEFT;
@@ -425,7 +426,7 @@ void Vim::onKey(TinyTerm::KeyCode key)
   }
   if (not playing)
   {
-    if (settings.mode != VISUAL or key<'0' or key>'9')
+    if (settings.mode != NORMAL or key<'0' or key>'9')
       record.push_back(key);
   }
 
@@ -438,8 +439,14 @@ void Vim::onKey(TinyTerm::KeyCode key)
     wbuff=nullptr;
   }
   else
+    vdebug("vcalc_win", hex(wid) << ", " << win);
+
+  if (key == TinyTerm::KEY_CTRL_L)
   {
-    vdebug("vcalc_bad", curwid);
+    term->clear();
+    drawSplitter();
+    if (wbuff)
+      wbuff->draw(win, *term);
   }
 
   if (key == ':' and settings.mode == NORMAL)
@@ -453,7 +460,7 @@ void Vim::onKey(TinyTerm::KeyCode key)
     // NOTE: mode command could be handled by a TinyConsole instance initialized with a virtual TinyTerm:
     // a term delimited by 0x4000 window.
     // TODO, WindowBuffer is nearly what is expected, especially clipping region.
-    // WindowBuffer class should be splitted in VirtualTerm handling the window region. 
+    // WindowBuffer class should be splitted in VirtualTerm handling the window region.
     switch(key)
     {
       case TinyTerm::KEY_RETURN:
@@ -479,7 +486,7 @@ void Vim::onKey(TinyTerm::KeyCode key)
     return;
   }
   
-  if (settings.mode == COMMAND or settings.mode == VISUAL or cmd!=Action::VIM_UNKNOWN)
+  if (settings.mode == NORMAL or cmd!=Action::VIM_UNKNOWN)
   {
     if (key>='0' and key<='9' and not playing)
     {
@@ -520,23 +527,15 @@ void Vim::onKey(TinyTerm::KeyCode key)
     else if (wbuff and cmd!=Action::VIM_UNKNOWN)
       wbuff->onAction(cmd, win, *this);
 
-    switch(key)
-    {
-      case 'a': setMode(INSERT); key=TinyTerm::KEY_RIGHT; break;
-    }
   }
   else
   {
     last_was_digit=false;
 
-    if (wbuff)
-    {
-      if (key==TinyTerm::KEY_CTRL_L)
-        wbuff->draw(win, *term);
-      else
-        wbuff->onKey(key, win, *this);
-    }
+    if (wbuff) wbuff->onKey(key, win, *this);
   }
+
+  vdebug("vimkey", "key:" << (key>31 and key<128 ? (char)key : ' ') << " (" << (int)key << "), recsize " << record.size() << ", rpt_count=" << rpt_count << ", play=" << playing << ", mode=" << settings.mode << "  ");
 }
 
 void Vim::onMouse(const TinyTerm::MouseEvent& e)
@@ -714,7 +713,7 @@ bool Splitter::calcWindow(Wid wid, Window& win, Splitter* splitter)
   }
   while(splitter)
   {
-    vdebug("split", "should not be here");
+    vdebug("split", "should not be here" << wid);
     if (splitter->split_.vertical)
       win.width = splitter->split_.size;
     else
