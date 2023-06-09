@@ -185,9 +185,11 @@ class Splitter
 
 struct VimSettings
 {
+  static constexpr const char* settings="so,siso,*,ts";
   uint8_t scrolloff = 5;
   uint8_t sidescrolloff = 0;
   uint8_t mode = 0;
+  uint8_t ts = 2;
 };
 
 class Vim : public tiny_bash::TinyApp
