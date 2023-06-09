@@ -363,10 +363,51 @@ void Vim::clip(const std::string& buff)
   clipboard_ = buff; 
 }
 
+char getChar(std::string& cmd)
+{
+  if (cmd.length()==0) return 0;
+  char c=cmd[0];
+  cmd.erase(0,1);
+  return c;
+}
+
+bool Vim::onCommand(std::string cmd)
+{
+  bool ret=true;
+  vdebug("EXEC", cmd << "   ");
+  WindowBuffer *wbuff = getWBuff(curwid);
+  while(cmd.length())
+  {
+    char c=getChar(cmd);
+    bool force=cmd[0]=='!';
+    bool ok=false;
+    Term << "EVAL CMD " << (c ? (char)c : '?') << endl;
+    switch (c)
+    {
+      case 'w':
+        if (wbuff and wbuff->save(getFile(env.cwd, cmd), force))
+          ok = true;
+        break;
+      case 'x':
+        if (wbuff and wbuff->save(getFile(env.cwd, cmd), force)) terminate();
+        break;
+      case 'q':
+        terminate();
+        return true;
+    }
+    Term << "RAN " << c << " res=" << ok << endl;
+    ret &= ok;
+    if (not ok)
+      error("Error in command");
+  }
+  vdebug("EXEC", "end exec, ret=" << ret);
+  return ret;
+}
+
 void Vim::onKey(TinyTerm::KeyCode key)
 {
   Action cmd = Action::VIM_UNKNOWN;
-  vdebug("vimkey", "recsize " << record.size() << ", rpt_count=" << rpt_count << ", play=" << playing << ", mode=" << settings.mode << "  ");
+  vdebug("vimkey", "key:" << (key>31 and key<128 ? (char)key : ' ') << " (" << (int)key << "), recsize " << record.size() << ", rpt_count=" << rpt_count << ", play=" << playing << ", mode=" << settings.mode << "  ");
 
   if (key == TinyTerm::KEY_ESC)
   {
@@ -388,22 +429,54 @@ void Vim::onKey(TinyTerm::KeyCode key)
       record.push_back(key);
   }
 
-  vdebug("vcmd", (int)cmd);
-
   Wid wid=settings.mode==COMMAND ? 0x4000 : curwid;
-  WindowBuffer *wbuff = getWBuff(curwid);
+  WindowBuffer *wbuff = getWBuff(wid);
   Window win;
-  vdebug("vcalc_win", win);
-  if (!calcWindow(curwid, win))
+  if (!calcWindow(wid, win))
+  {
+    vdebug("vcalc_win", "bad " << hex(wid));
     wbuff=nullptr;
+  }
   else
   {
     vdebug("vcalc_bad", curwid);
   }
 
-  if (key==':' & (settings.mode & EDIT_MODE)==0)
+  if (key == ':' and settings.mode == NORMAL)
   {
     settings.mode = COMMAND;
+    scmd.clear();
+    return;
+  }
+  else if (settings.mode == COMMAND)
+  {
+    // NOTE: mode command could be handled by a TinyConsole instance initialized with a virtual TinyTerm:
+    // a term delimited by 0x4000 window.
+    // TODO, WindowBuffer is nearly what is expected, especially clipping region.
+    // WindowBuffer class should be splitted in VirtualTerm handling the window region. 
+    switch(key)
+    {
+      case TinyTerm::KEY_RETURN:
+      {
+        settings.mode = NORMAL;
+        vdebug("COMMAND", "EXEC " << scmd);
+        onCommand(scmd);
+        scmd.clear();
+        break;
+      }
+      case TinyTerm::KEY_BACK:
+        if (scmd.length()) scmd.erase(scmd.length()-1,1);
+        break;
+      default:
+        if (key>=' ' and key<=128)
+          scmd += key;
+        vdebug("COMMAND", scmd << "   ");
+        break;
+    }
+    term->gotoxy(win.top, win.left);
+    *term << scmd << "   ";
+    term->gotoxy(win.top, win.left+scmd.length());
+    return;
   }
   
   if (settings.mode == COMMAND or settings.mode == VISUAL or cmd!=Action::VIM_UNKNOWN)
@@ -422,7 +495,7 @@ void Vim::onKey(TinyTerm::KeyCode key)
     {
       scmd += (char)key;
       cmd = getAction(scmd.c_str());
-      vdebug("scmd", scmd);
+      vdebug("scmd", scmd << ", cmd " << (int)cmd);
       switch(cmd)
       {
         case Action::VIM_INSERT: setMode(INSERT); break;

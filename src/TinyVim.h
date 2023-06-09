@@ -195,7 +195,7 @@ class Vim : public tiny_bash::TinyApp
   public:
     using Record=std::vector<TinyTerm::KeyCode>;
     enum {
-      VISUAL = 0,
+      NORMAL = 0,
       COMMAND = 1,
       INSERT = 2,
       REPLACE = 3,
@@ -208,6 +208,7 @@ class Vim : public tiny_bash::TinyApp
 
     void onKey(TinyTerm::KeyCode) override;
     void onMouse(const TinyTerm::MouseEvent&) override;
+    bool onCommand(std::string cmd);
 
     void loop() override;
     TinyTerm& getTerm() const { return *term; }
