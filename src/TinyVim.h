@@ -72,6 +72,7 @@ class WindowBuffer
     ~WindowBuffer() { Term << "~WindowBuffer "; }
     Cursor buffCursor() const;  // compute position in file from pos and cursor (screen)
     void gotoWord(int dir, Cursor&);
+    bool save(const std::string& filename, bool force);
 
   private:
     void validateCursor(const Window& win, Vim& term);
@@ -89,7 +90,7 @@ class Buffer
     string filename() const { return filename_; }
     void reset();
     bool read(const char* filename);
-    bool save();
+    bool save(std::string filename, bool force);
     const string& getLine(Cursor::type line) const;
     string& takeLine(Cursor::type line);
     void insertLine(Cursor::type nr);
@@ -98,6 +99,7 @@ class Buffer
     bool modified() const { return modified_; }
     void addWindow(Wid wid);
     void removeWindow(Wid wid) { wbuffs.erase(wid); }
+    void setFileName(const std::string& filename) { filename_ = filename; }
     WindowBuffer* getWBuff(Wid wid);
     ~Buffer() { Term << "~Buffer "; }
 

@@ -1,4 +1,5 @@
 #include "string_util.h"
+#include "file_util.h"
 #include <TinyStreaming.h>
 #include <TinyTerm.h>
 #include "TinyVim.h"
@@ -81,6 +82,7 @@ Vim::Vim(TinyTerm* term, string args)
   Window split_win(1,1,term->sx, term->sy);
   splitter.draw(split_win, *term);
   buffers[args].read(args.c_str());
+  buffers[args].setFileName(args.c_str());
   buffers[args].addWindow(curwid);
   buffers[args].redraw(curwid, term, &splitter);
 
@@ -226,9 +228,7 @@ void Buffer::redraw(Wid wid, TinyTerm* term, Splitter* splitter)
 
 bool Buffer::read(const char* filename)
 {
-  reset();
   uint16_t lines = 1;
-  filename_ = filename;
   File file = LittleFS.open(filename, "r");
   if (!file)
   {
@@ -259,6 +259,38 @@ bool Buffer::read(const char* filename)
  }
   if (s.length()) buffer[lines++] = s; // (no eol)
   return true;
+}
+
+bool Buffer::save(std::string filename, bool force)
+{
+  if (filename.length()==0) { filename = filename_; force=true; }
+  if (filename.length())
+  {
+    if (cr1==0) { cr1=13; cr2=10; }
+    Term << "TRYING " << filename << ", f=" << force << endl;
+    if (force or not LittleFS.exists(filename.c_str()))
+    {
+      File file=LittleFS.open(filename.c_str(), "w");
+      if (not file) return false;
+      Term << "WRITING " << (file ? 1 : 0) << ' ' << lines() << " lines" << endl;
+      for(Cursor::type l=1; l<=lines(); l++)
+      {
+        Term.clear();
+        Term << "WRITE " << (int)l << ' ' << getLine(l) << '.' << endl;
+        file << getLine(l).c_str() << cr1;
+        if (cr2) file << cr2;
+      }
+      return true;
+    }
+    else
+      error("File exists");
+  }
+  return false;
+}
+
+bool WindowBuffer::save(const std::string& filename, bool force)
+{
+  return buff.save(filename, force);
 }
 
 WindowBuffer* Vim::getWBuff(Wid wid)
