@@ -526,14 +526,12 @@ void Vim::onKey(TinyTerm::KeyCode key)
     }
     else if (wbuff and cmd!=Action::VIM_UNKNOWN)
       wbuff->onAction(cmd, win, *this);
-
   }
   else
   {
     last_was_digit=false;
-
-    if (wbuff) wbuff->onKey(key, win, *this);
   }
+  if (wbuff) wbuff->onKey(key, win, *this);
 
   vdebug("vimkey", "key:" << (key>31 and key<128 ? (char)key : ' ') << " (" << (int)key << "), recsize " << record.size() << ", rpt_count=" << rpt_count << ", play=" << playing << ", mode=" << settings.mode << "  ");
 }
@@ -713,7 +711,7 @@ bool Splitter::calcWindow(Wid wid, Window& win, Splitter* splitter)
   }
   while(splitter)
   {
-    vdebug("split", "should not be here" << wid);
+    vdebug("split", "should not be here " << hex(wid));
     if (splitter->split_.vertical)
       win.width = splitter->split_.size;
     else
@@ -818,6 +816,7 @@ void WindowBuffer::draw(const Window& win, TinyTerm& term, uint16_t first, uint1
     }
     else
       s.clear();
+    if (pos.row+row > buff.lines()) s="~";
     if (win.width>s.length())
       term << string(win.width-s.length(), ' ');
     yield();
