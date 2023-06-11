@@ -73,6 +73,8 @@ class WindowBuffer
     Cursor buffCursor() const;  // compute position in file from pos and cursor (screen)
     void gotoWord(int dir, Cursor&);
     bool save(const std::string& filename, bool force);
+    void gotoxy(uint16_t row, uint16_t col=0);
+    void status(const Window& win, TinyTerm& term);
 
   private:
     void validateCursor(const Window& win, Vim& term);
@@ -97,7 +99,7 @@ class Buffer
     std::string deleteLine(Cursor::type nr);
     Cursor::type lines() const;
     bool modified() const { return modified_; }
-    void addWindow(Wid wid);
+    WindowBuffer* addWindow(Wid wid);
     void removeWindow(Wid wid) { wbuffs.erase(wid); }
     void setFileName(const std::string& filename) { filename_ = filename; }
     WindowBuffer* getWBuff(Wid wid);
@@ -167,12 +169,14 @@ class Splitter
     Wid findWindow(Window&, const Cursor&);
     // care : Window is modified
     bool calcWindow(Wid, Window&, Splitter* start=nullptr);
-    bool split(Wid, char v_h, uint16_t size);
+    Splitter* split(Wid, char v_h, uint16_t size);
     void close(Wid);
     void draw(Window win, TinyTerm& term, Wid wid_base=0x8000);
     bool forEachWindow(Window& from,
       std::function<bool(const Window&, Wid wid, const Splitter* cur_split)>,
       Wid wid=0x8000);
+
+    uint16_t size() const { return split_.size; }
 
     void dump(Window, string indent="", Wid cur_wid=0x8000);
     void dump2(Window);
@@ -220,6 +224,7 @@ class Vim : public tiny_bash::TinyApp
     void clip(const std::string&);
     const std::string& clipboard() const { return clipboard_; }
     void setMode(uint8_t);
+    void redraw();
 
   private:
     void drawSplitter();
