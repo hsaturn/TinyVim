@@ -409,7 +409,6 @@ bool Vim::calcWindow(Wid wid, Window& win)
 
 void Vim::play(const Record& rec, uint8_t count)
 {
-  static int c=0;
   playing = true;
   while(count)
   {
@@ -908,7 +907,6 @@ Cursor WindowBuffer::buffCursor() const
 void WindowBuffer::gotoWord(int dir, Cursor& cursor)
 {
   auto isSep = [](char c) { return not(isalnum(c) or c=='_'); };
-  bool inside=true;
   cursor.col--;
 
   const std::string& s = buff.getLine(cursor.row);
