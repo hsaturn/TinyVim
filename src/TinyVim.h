@@ -4,10 +4,6 @@
 #include <map>
 #include <vector>
 #include "TinyApp.h"
-#include <LittleFS.h>
-
-#define FS LittleFS
-
 
 namespace tiny_vim
 {
