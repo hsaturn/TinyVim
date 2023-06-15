@@ -944,9 +944,9 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
   switch(cmd)
   {
     case Action::VIM_CHANGE:
-      vim.clip(line.substr(buff_cur.col));
-      line.erase(buff_cur.col);
-      vim.onKey(TinyTerm::KEY_INS);
+      del_from = buff_cur;
+      buff_cur.row++;
+      mode=Vim::INSERT;
       break;
     case Action::VIM_PUT_BEFORE:
     case Action::VIM_PUT_AFTER:
@@ -973,6 +973,7 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
       }
       else
       {
+        if (buff_cur.col > line.length()) buff_cur.col=line.length();
         line.insert(buff_cur.col - (after ? 0 : 1), clip);
         buff_cur.col += clip.length();
       }
@@ -1022,9 +1023,15 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
   if (del_from.row)
   {
     if (buff_cur.row==del_from.row)
+    {
+      vim.clip(line.substr(del_from.col));
       line.erase(del_from.col-1, buff_cur.col-del_from.col);
+    }
     else
+    {
+      vim.clip(line.substr(del_from.col));
       line.erase(del_from.col-1);
+    }
     buff_cur = del_from;
   }
   if (redraw.row) draw(win, vim.getTerm(), redraw.row, redraw.row+redraw.col);
