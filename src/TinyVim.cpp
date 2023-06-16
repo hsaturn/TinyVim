@@ -158,7 +158,7 @@ void Vim::drawSplitter()
 
 void Vim::loop()
 {
-  
+
 }
 
 void Window::frame(TinyTerm& term)
@@ -167,11 +167,11 @@ void Window::frame(TinyTerm& term)
   auto line=[&term, this]() {
     for(int i=0; i<width; i++) term << "\u2500";
   };
-  auto side=[&term, this]() { 
+  auto side=[&term, this]() {
     for(int i=0; i<height; i++) term << "\u2502\033[1B\033[1D";
   };
   uint16_t has_right = left + width;
-  if (has_right > term.sx) has_right = 0; 
+  if (has_right > term.sx) has_right = 0;
   uint16_t has_bottom = top + height;
   if (has_bottom > term.sy) has_bottom = 0;
 
@@ -264,7 +264,6 @@ std::string Buffer::deleteLine(Cursor::type line)
 void Buffer::insertLine(Cursor::type line)
 {
   Cursor::type last=lines();
-  if (line>last) line=last;
   std::string s=getLine(line);
   takeLine(line).clear();
   while(line<=last)
@@ -973,7 +972,7 @@ void WindowBuffer::onAction(Action cmd, const Window& win, Vim& vim)
       }
       else
       {
-        if (buff_cur.col > line.length()) buff_cur.col=line.length();
+        if (buff_cur.col > (int)line.length()) buff_cur.col=line.length();
         line.insert(buff_cur.col - (after ? 0 : 1), clip);
         buff_cur.col += clip.length();
       }
@@ -1054,16 +1053,24 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
   {
     case TinyTerm::KEY_RETURN:
     {
-      if (edit_mode)
+      if (settings.mode == Vim::INSERT)
       {
-        buff.insertLine(buff_cur.row+1);
-        string s = buff.getLine(buff_cur.row);
-        buff.takeLine(buff_cur.row)=s.substr(0, buff_cur.col-1);
-        buff.takeLine(buff_cur.row+1)=s.substr(buff_cur.col-1);
         cdraw={ buff_cur.row, buff.lines()};
+        buff.insertLine(buff_cur.row+1);
+        string &s = buff.takeLine(buff_cur.row);
+        buff_cur.row++;
+        string &nl = buff.takeLine(buff_cur.row);
+        while(s[nl.length()]==' ') nl += ' ';
+        if (buff_cur.col < (int)s.length())
+        {
+          nl += s.substr(buff_cur.col-1);
+          s.erase(buff_cur.col);
+        }
+        cursor.col = nl.length()+1;
       }
+      else
+        cursor.col=1;
       cursor.row++;
-      cursor.col=1;
       break;
     }
     case TinyTerm::KEY_BACK:
@@ -1072,9 +1079,9 @@ void WindowBuffer::onKey(TinyTerm::KeyCode key, const Window& win, Vim& vim)
       if (buff_cur.col > 1)
       {
         cursor.col--;
-        if (edit_mode)
+        if (edit_mode and (int)line.length() >= buff_cur.col-1)
         {
-          line.erase(buff_cur.col-1, 1);
+          line.erase(buff_cur.col-2, 1);
           cdraw.row = buff_cur.row;
         }
       }
